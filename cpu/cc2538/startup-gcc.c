@@ -41,6 +41,7 @@
 #include "flash-cca.h"
 #include "sys-ctrl.h"
 #include "rom-util.h"
+#include <mpu.h>
 
 #include <stdint.h>
 /*---------------------------------------------------------------------------*/
@@ -116,7 +117,7 @@ void(*const vectors[])(void) =
   reset_handler,              /* Reset handler */
   nmi_handler,                /* The NMI handler */
   default_handler,            /* The hard fault handler */
-  default_handler,            /* 4 The MPU fault handler */
+  cm3_mpu_fault_handler,      /* 4 The MPU fault handler */
   default_handler,            /* 5 The bus fault handler */
   default_handler,            /* 6 The usage fault handler */
   0,                          /* 7 Reserved */
