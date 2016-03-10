@@ -298,6 +298,29 @@ default_handler(void)
 {
   while(1);
 }
+
+/*extern void (**__preinit_array_start)();
+extern void (**__preinit_array_end)();*/
+extern void (*__init_array_start []) (void) __attribute__((weak));
+extern void (*__init_array_end []) (void) __attribute__((weak));
+
+
+inline void static_init()
+{
+  size_t count;
+  size_t i;
+  void (**p)();
+
+  count = __init_array_end - __init_array_start;
+  if(0)
+    for (i = 0; i < count; i++)
+        __init_array_start[i] ();
+  /*for (void (**p)() = __preinit_array_start; p < __preinit_array_end; ++p)
+    (*p)();*/
+  for (p = __init_array_start; p < __init_array_end; ++p)
+    (*p)();
+}
+
 /*---------------------------------------------------------------------------*/
 void
 reset_handler(void)
@@ -309,6 +332,9 @@ reset_handler(void)
 
   /* Zero-fill the bss segment. */
   rom_util_memset(&_bss, 0, &_ebss - &_bss);
+
+  /* Do initialisation of C++ global objects */
+  static_init();
 
   /* call the application's entry point. */
   main();

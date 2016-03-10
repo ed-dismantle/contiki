@@ -85,6 +85,14 @@ SECTIONS
         *(.udma_channel_control_table)
     } > SRAM
 
+    .rodata : ALIGN(4)
+    {
+	__init_array_start = .;
+	KEEP (*(SORT(.init_array.*)))
+	KEEP (*(.init_array))
+	__init_array_end = .;
+    } > FLASH
+
     .data : ALIGN(4)
     {
         _data = .;
@@ -95,7 +103,9 @@ SECTIONS
 
     .ARM.exidx :
     {
+        __exidx_start = .;
         *(.ARM.exidx*)
+	__exidx_end = .;
     } > FLASH
 
     .bss :
