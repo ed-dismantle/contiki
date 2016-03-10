@@ -39,33 +39,19 @@
 unsigned long __attribute__((naked))
 cpu_cpsie(void)
 {
-  unsigned long ret;
-
   /* Read PRIMASK and enable interrupts */
   __asm("    mrs     r0, PRIMASK\n"
         "    cpsie   i\n"
-        "    bx      lr\n"
-        : "=r" (ret));
-
-  /* The inline asm returns, we never reach here.
-   * We add a return statement to keep the compiler happy */
-  return ret;
+        "    bx      lr\n");
 }
 /*---------------------------------------------------------------------------*/
 unsigned long __attribute__((naked))
 cpu_cpsid(void)
 {
-  unsigned long ret;
-
   /* Read PRIMASK and disable interrupts */
   __asm("    mrs     r0, PRIMASK\n"
         "    cpsid   i\n"
-        "    bx      lr\n"
-        : "=r" (ret));
-
-  /* The inline asm returns, we never reach here.
-   * We add a return statement to keep the compiler happy */
-  return ret;
+        "    bx      lr\n");
 }
 /*---------------------------------------------------------------------------*/
 
