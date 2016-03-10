@@ -106,8 +106,13 @@ SECTIONS
         _ebss = .;
     } > SRAM
 
-    .stack (NOLOAD) :
+    _heap = _ebss;
+    _eheap = _stack;
+
+    _stack_len = 2048;
+    .stack ORIGIN(SRAM) + LENGTH(SRAM) - _stack_len (NOLOAD) :
     {
+        _stack = .;
         *(.stack)
     } > SRAM
 
