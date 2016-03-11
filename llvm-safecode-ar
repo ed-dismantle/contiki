@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# We do linking instead of archiving. We need one big LLVM bitcode file to run poolalloc over,
+# and the LLVM linker doesn't support ar archives, so this is the only way I could get it to work.
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+LLVM_BIN_DIR=${DIR}/../safecode-llvm37/build/Debug+Asserts/bin
+RUNTIME_DIR=${DIR}/safecode
+
+function execute {
+  [[ "$VERBOSE" == "1" ]] && echo $1
+  eval $1
+}
+
+i=0
+args=("$@")
+for var in "$@"
+do
+  file_type=$(file "$var" 2> /dev/null)
+  # Find the output file name
+  if [[ "$var" == *".a" ]]
+  then
+    output_file_name=${args[$i]}
+  # Build a list of input object files, excluding those that should not be poolalloced
+  elif [[ "$file_type" == *"LLVM IR bitcode"* ]]
+  then
+    if ! grep -Fxq "$var" ${RUNTIME_DIR}/dont_poolalloc
+    then
+      obj_files="$obj_files $var"
+    fi
+  fi
+  i=$((i+1))
+done
+
+# Run the LLVM linker
+if ! [ "$obj_files" = "" ];
+then
+  execute "${LLVM_BIN_DIR}/llvm-link ${obj_files} -o ${output_file_name}"
+  [[ "$VERBOSE" == "1" ]] && echo || true
+fi
+

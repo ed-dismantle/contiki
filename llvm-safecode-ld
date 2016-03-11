@@ -1,0 +1,157 @@
+#!/bin/bash
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+POOLALLOC_LIB_DIR=${DIR}/../safecode-llvm37/build/projects/poolalloc/Debug+Asserts/lib
+SAFECODE_LIB_DIR=${DIR}/../safecode-llvm37/build/Debug+Asserts/lib
+LLVM_BIN_DIR=${DIR}/../safecode-llvm37/build/Debug+Asserts/bin
+RUNTIME_DIR=${DIR}/safecode
+
+function execute {
+  [[ "$VERBOSE" == "1" ]] && echo $1
+  eval $1
+}
+
+i=0
+args=("$@")
+for var in "$@"
+do
+  file_type=$(file "$var" 2> /dev/null)
+  # Get the output file name with and without extension
+  if [ "$var" = "-o" ];
+  then
+    output_file_full_name=${args[$((i+1))]}
+    output_file_name=${output_file_full_name%.*}
+  # Create a list of object files to be built from the arguments,
+  # excluding any that are listed in the "dont_poolalloc" file
+  elif [[ "$file_type" == *"LLVM IR bitcode"* ]]
+  then
+    if ! grep -Fxq "$var" ${RUNTIME_DIR}/dont_poolalloc
+    then
+      obj_files="$obj_files $var"
+    fi
+  # Create a list of LD arguments, making sure not to add the output file name.
+  elif [ "$var" != "$output_file_full_name" ];
+  then
+    ldargs="$ldargs $var"
+  fi
+  i=$((i+1))
+done
+
+# Link all the object files into one LLVM bitcode file, so that we can run poolalloc on it
+# But if we only passed a single object in, skip linking and just copy input to output
+words=$(wc -w <<< "$obj_files")
+if [ "$words" -gt "1" ]; then
+  execute "${LLVM_BIN_DIR}/llvm-link ${obj_files} -o ${output_file_name}.bc "
+else
+  cp ${obj_files} ${output_file_name}.bc
+fi
+
+# Run poolalloc over the giant object file
+execute "\
+${LLVM_BIN_DIR}/opt -stats -march=thumb -mcpu=cortex-m3 \
+	-load ${POOLALLOC_LIB_DIR}/LLVMDataStructure.so \
+	-load ${POOLALLOC_LIB_DIR}/poolalloc.so \
+	-paheur-AllHeapNodes -poolalloc \
+	${output_file_name}.bc > ${output_file_name}.pa.bc
+	"
+
+# Run the passes to insert range checks
+# NOTE: Really we should run these first, then run poolalloc so it can create pool handles,
+# then run the passes that remove checks. This has proved difficult to orchestrate correctly
+execute "\
+${LLVM_BIN_DIR}/opt -stats -march=thumb -mcpu=cortex-m3 \
+	-load ${SAFECODE_LIB_DIR}/sc-support.so \
+	-load ${POOLALLOC_LIB_DIR}/LLVMDataStructure.so \
+	-load ${SAFECODE_LIB_DIR}/abc.so \
+	-load ${SAFECODE_LIB_DIR}/sc-support.so \
+	-load ${SAFECODE_LIB_DIR}/scutility.so \
+	-load ${SAFECODE_LIB_DIR}/formatstrings.so \
+	-load ${SAFECODE_LIB_DIR}/addchecks.so \
+	-load ${SAFECODE_LIB_DIR}/cmspasses.so \
+	-load ${SAFECODE_LIB_DIR}/optchecks.so \
+	-load ${SAFECODE_LIB_DIR}/cstdlib.so \
+	-load ${SAFECODE_LIB_DIR}/oob.so \
+	-reg-byval-args -reg-custom-alloc -reg-argv -reg-globals -reg-stack-obj \
+	-reg-runtime-init \
+	-instrument-memory-accesses \
+	-gepchecks \
+	-compchecks \
+	-freechecks \
+	-specialize-cms-calls \
+	-safecode-msc-info -targetlibinfo -exactcheck-opt \
+	-opt-checks \
+	-opt-safels \
+	-rm-slowchecks \
+	-optimize-identical-ls-checks -optimize-implied-fast-ls-checks \
+	-inline-fastchecks \
+	-break-conststrings -loggingfunctions -string_transform -formatstrings \
+	-lower-sc-intrinsic \
+	${output_file_name}.pa.bc > ${output_file_name}.pa.sc.bc \
+	"
+# Passes that error:
+# Passes that currently do nothing:
+# Passes that otherwise dont work (e.g. resulting binary doesn't fit in RAM/flash):
+	#-cfichecks \
+# Passes that we just don't want
+	#-oob-rewriter \
+	#-registervarargcallsites \
+	#-poolreg-global-elim \
+	#-reg-byval-args -reg-custom-alloc -reg-argv -reg-globals -reg-stack-obj \
+
+
+# Link in the files that are excluded from being poolalloced
+# First create a list of files that should not be run with pool alloc, (from the list in
+# the dont_poolalloc file), so that we can manually link them in later
+while read obj; do
+  if [ -f ${obj} ];
+  then
+    dont_poolalloc_obj_files="$dont_poolalloc_obj_files ${obj}"
+  fi
+done <${RUNTIME_DIR}/dont_poolalloc
+execute "${LLVM_BIN_DIR}/llvm-link  ${output_file_name}.pa.sc.bc ${dont_poolalloc_obj_files} -o ${output_file_name}.pa.sc.all.bc"
+
+# Run the LLVM optimiser
+#${LLVM_BIN_DIR}/opt -march=thumb -mcpu=cortex-m3 -Oz ${output_file_name}.pa.opt.1.bc > ${output_file_name}.pa.opt.bc
+
+# Compile the resulting object into an assembly listing
+execute "${LLVM_BIN_DIR}/llc -march=thumb -mcpu=cortex-m3 -function-sections -data-sections ${output_file_name}.pa.sc.all.bc"
+
+# Assemble the listing into an object file
+execute "arm-none-eabi-gcc -c -mcpu=cortex-m3 -mthumb -nostartfiles ${output_file_name}.pa.sc.all.s -o ${output_file_name}.o"
+
+# Strip the binaries (this isn't working, it strips too much)
+#arm-none-eabi-strip -v ${output_file_name}.o
+
+# Attempted to use clang to do the linking, using the LD arguments we put together earlier.
+# It didn't work, but might do now that we don't have to link to libgcc, libnosys and libc any more.
+# It just uses ld to link anyway, so doesn't really matter
+#~/project/safecode-llvm37-new/build/Debug+Asserts/bin/clang -I/usr/lib/arm-none-eabi/include/ -ffunction-sections -fdata-sections -fshort-enums -fomit-frame-pointer -fno-strict-aliasing -nostdlib -ffreestanding -target arm-none-eabi ${ldargs} ${output_file_name}.o ~/project/contiki/cpu/cc2538/PoolAllocator.o /usr/lib/arm-none-eabi/newlib/libc.a /usr/lib/arm-none-eabi/newlib/libnosys.a /usr/lib/gcc/arm-none-eabi/4.8.2/thumb/libgcc.a -o ${output_file_full_name}
+
+# Call gcc to do the linking, using the LD arguments we put together earlier. Link in the poolallocator run time
+execute "\
+arm-none-eabi-gcc -Os -Wl,--allow-multiple-definition ${ldargs} \
+	${output_file_name}.o \
+	${RUNTIME_DIR}/stdio.o \
+	${RUNTIME_DIR}/stdarg.o \
+	${RUNTIME_DIR}/string.o \
+	${RUNTIME_DIR}/strings.o \
+	${RUNTIME_DIR}/FormatStrings.o \
+	${RUNTIME_DIR}/PrintfSupport.o \
+	${RUNTIME_DIR}/cxxdummy.o \
+	${RUNTIME_DIR}/EmbeddedAllocator.o \
+	${RUNTIME_DIR}/PoolAllocator.o \
+	${RUNTIME_DIR}/Report.o \
+	${RUNTIME_DIR}/DebugReport.o \
+	${RUNTIME_DIR}/RangeTree.o \
+	${RUNTIME_DIR}/cmap.o \
+	${RUNTIME_DIR}/cset.o \
+	${RUNTIME_DIR}/cvector.o \
+	-o ${output_file_full_name} \
+	"
+
+# Remove all the intermediate garbage we created
+execute "rm -f *.bc *.s"
+
+[[ "$VERBOSE" == "1" ]] && echo || true
+
+

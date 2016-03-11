@@ -1,0 +1,26 @@
+#!/bin/bash
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+LLVM_BIN_DIR=${DIR}/../safecode-llvm37/build/Debug+Asserts/bin
+
+function execute {
+  [[ "$VERBOSE" == "1" ]] && echo $1
+  eval $1
+}
+
+# Build LLVM bitcode files, but only if we are building an actual C file (not for, e.g. .lds linker scripts)
+for var in "$@"
+do
+  filetype=$(file "$var" 2> /dev/null)
+
+  if [[ (("$filetype" == *"C source"*) || ("$filetype" == *"ASCII text"*)) && ("${var##*.}" = "c") ]]
+  then
+    ccargs="-emit-llvm"
+  fi
+done
+
+[[ "$VERBOSE" == "1" ]] && echo ${LLVM_BIN_DIR}/clang $ccargs -Oz "$@"
+${LLVM_BIN_DIR}/clang $ccargs -Oz "$@"
+
+[[ "$VERBOSE" == "1" ]] && echo || true
+
