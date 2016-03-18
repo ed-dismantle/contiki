@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 POOLALLOC_LIB_DIR=${DIR}/../safecode-llvm37/build/projects/poolalloc/Debug+Asserts/lib
 SAFECODE_LIB_DIR=${DIR}/../safecode-llvm37/build/Debug+Asserts/lib
@@ -8,7 +9,10 @@ RUNTIME_DIR=${DIR}/safecode
 
 function execute {
   [[ "$VERBOSE" == "1" ]] && echo $1
-  eval $1
+  if ! eval $1; then
+    rm -f *.bc *.s ${output_file_name}.o
+    exit 1
+  fi
 }
 
 i=0

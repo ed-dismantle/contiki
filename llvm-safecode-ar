@@ -9,7 +9,9 @@ RUNTIME_DIR=${DIR}/safecode
 
 function execute {
   [[ "$VERBOSE" == "1" ]] && echo $1
-  eval $1
+  if ! eval $1; then
+    exit 1
+  fi
 }
 
 i=0

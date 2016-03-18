@@ -3,11 +3,6 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 LLVM_BIN_DIR=${DIR}/../safecode-llvm37/build/Debug+Asserts/bin
 
-function execute {
-  [[ "$VERBOSE" == "1" ]] && echo $1
-  eval $1
-}
-
 # Build LLVM bitcode files, but only if we are building an actual C file (not for, e.g. .lds linker scripts)
 for var in "$@"
 do
@@ -20,7 +15,10 @@ do
 done
 
 [[ "$VERBOSE" == "1" ]] && echo ${LLVM_BIN_DIR}/clang $ccargs -Oz "$@"
-${LLVM_BIN_DIR}/clang $ccargs -Oz "$@"
+if ! ${LLVM_BIN_DIR}/clang $ccargs -Oz "$@"; then
+  exit 1
+fi
 
 [[ "$VERBOSE" == "1" ]] && echo || true
+
 
