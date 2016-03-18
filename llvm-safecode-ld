@@ -71,7 +71,7 @@ ${LLVM_BIN_DIR}/opt -stats -march=thumb -mcpu=cortex-m3 \
 	-load ${SAFECODE_LIB_DIR}/optchecks.so \
 	-load ${SAFECODE_LIB_DIR}/cstdlib.so \
 	-load ${SAFECODE_LIB_DIR}/oob.so \
-	-reg-byval-args -reg-custom-alloc -reg-argv -reg-globals -reg-stack-obj \
+	-reg-byval-args -reg-argv -reg-globals -reg-stack-obj \
 	-reg-runtime-init \
 	-instrument-memory-accesses \
 	-gepchecks \
@@ -92,6 +92,7 @@ ${LLVM_BIN_DIR}/opt -stats -march=thumb -mcpu=cortex-m3 \
 # Passes that currently do nothing:
 # Passes that otherwise dont work (e.g. resulting binary doesn't fit in RAM/flash):
 	#-cfichecks \
+	#-reg-custom-alloc
 # Passes that we just don't want
 	#-oob-rewriter \
 	#-registervarargcallsites \
@@ -150,7 +151,7 @@ arm-none-eabi-gcc -Os -Wl,--allow-multiple-definition ${ldargs} \
 	"
 
 # Remove all the intermediate garbage we created
-execute "rm -f *.bc *.s"
+execute "rm -f *.bc *.s ${output_file_name}.o"
 
 [[ "$VERBOSE" == "1" ]] && echo || true
 
