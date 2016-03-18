@@ -19,9 +19,7 @@ _sbrk(int incr) {
 
   prev_allocated_end = allocated_end;
   if (allocated_end + incr > &_eheap) {
-  //  printf("Heap full (requested %d, available %d)\n", incr,
-    //  (int)(&_eheap - allocated_end));
-    //dbg_send_bytes("Heap full\n", 10);
+    printf("Heap full (requested %d, available %d)\n", incr, (int)(&_eheap - allocated_end));
     errno = ENOMEM;
     return (caddr_t)-1;
   }
