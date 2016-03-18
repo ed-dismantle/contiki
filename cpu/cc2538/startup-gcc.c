@@ -312,9 +312,6 @@ inline void static_init()
   void (**p)();
 
   count = __init_array_end - __init_array_start;
-  if(0)
-    for (i = 0; i < count; i++)
-        __init_array_start[i] ();
   /*for (void (**p)() = __preinit_array_start; p < __preinit_array_end; ++p)
     (*p)();*/
   for (p = __init_array_start; p < __init_array_end; ++p)
@@ -335,7 +332,7 @@ reset_handler(void)
 
   /* Do initialisation of C++ global objects */
   static_init();
-
+  
   /* call the application's entry point. */
   main();
 
